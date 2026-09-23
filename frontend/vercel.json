@@ -1,1 +1,12 @@
-{"rewrites": [{"source": "/api/(.*)", "destination": "/api/index.js"}, {"source": "/(.*)", "destination": "/index.html"}]}
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://campus-search-backend.vercel.app/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

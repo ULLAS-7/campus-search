@@ -26,42 +26,42 @@ const INQUIRY_WINDOW_MS = 24 * 60 * 60 * 1000;       // 24 hours for inquiry res
 // =============================================
 
 async function createRequest(listingId, buyerId, quantity = 1) {
-      const listing = await db.prepare("SELECT * FROM listings WHERE id = ?").get(listingId);
-    if (!listing) throw new HttpError(404, "Listing not found");
-    if (listing.status === "claimed" || listing.quantity < quantity) {
-      throw new HttpError(409, "This item does not have enough stock available.");
-    }
-    if (listing.seller_id === buyerId) {
-      throw new HttpError(400, "You can't request your own listing.");
-    }
+  // Pre-flight checks that don't need to be inside the atomic window
+  const listing = await db.prepare("SELECT * FROM listings WHERE id = ?").get(listingId);
+  if (!listing) throw new HttpError(404, "Listing not found");
+  if (listing.seller_id === buyerId) throw new HttpError(400, "You can't request your own listing.");
 
-    const id = uuid();
-    await db.prepare(
-      `INSERT INTO requests (id, listing_id, buyer_id, quantity, status) VALUES (?, ?, ?, ?, 'notified')`
-    ).run(id, listingId, buyerId, quantity);
+  // Atomic decrement: only succeeds if the row still has enough quantity at
+  // write time — this eliminates the TOCTOU race between two concurrent buyers.
+  // If rowCount === 0, another request got there first → 409.
+  const updateResult = await db.query(
+    `UPDATE listings
+     SET quantity = quantity - ?,
+         status   = CASE WHEN (quantity - ?) > 0 THEN 'available' ELSE 'pending' END,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?
+       AND quantity >= ?
+       AND status NOT IN ('claimed', 'removed', 'expired')`,
+    [quantity, quantity, listingId, quantity]
+  );
 
-    const newQty = listing.quantity - quantity;
-    const newStatus = newQty > 0 ? "available" : "pending";
-    await db.prepare(`UPDATE listings SET quantity = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(newQty, newStatus, listingId);
-    
-    return id;
+  if (!updateResult.rowCount || updateResult.rowCount === 0) {
+    throw new HttpError(409, "This item does not have enough stock available.");
+  }
 
-  const requestId = id;
-  const request = await getRequest(requestId);
-  const seller = await db.prepare("SELECT * FROM users WHERE id = ?").get(request.seller_id);
-  const buyer = await db.prepare("SELECT * FROM users WHERE id = ?").get(buyerId);
+  const id = uuid();
+  await db.prepare(
+    `INSERT INTO requests (id, listing_id, buyer_id, quantity, status) VALUES (?, ?, ?, ?, 'notified')`
+  ).run(id, listingId, buyerId, quantity);
 
-  notificationService.notify(seller, {
-    type: "new_request",
-    title: "📦 New Request!",
-    message: `${buyer.name} wants your "${request.item_name}". Accept or decline within 24 hours.`,
-    data: { requestId, listingId, action: "go_to_inbox" },
-  });
-
-  return request;
+  return id;
 }
 
 async function respondToRequest(requestId, sellerId, decision, deliveryDay) {
+  // Inline safety: expire any stale notified/accepted requests for this listing
+  // before reading status — correctness must not depend solely on the cron job.
+  await expireStaleRequestsForListing(requestId);
+
   const request = await getRequestRaw(requestId);
     if (!request) throw new HttpError(404, "Request not found");
 
@@ -103,6 +103,10 @@ async function respondToRequest(requestId, sellerId, decision, deliveryDay) {
 }
 
 async function confirmDelivered(requestId, buyerId) {
+  // Inline safety: run the same expiry logic before checking status so a
+  // request that should have expired isn't accidentally confirmed as delivered.
+  await expireStaleRequestsForListing(requestId);
+
   const request = await getRequestRaw(requestId);
   if (!request) throw new HttpError(404, "Request not found");
   if (request.buyer_id !== buyerId) throw new HttpError(403, "Only the buyer can confirm delivery.");
@@ -315,6 +319,13 @@ async function sweepExpiredRequests() {
     if (r.accepted_at && now - new Date(r.accepted_at + "Z").getTime() > NO_SHOW_WINDOW_MS) {
       await db.prepare(`UPDATE requests SET status = 'no_show' WHERE id = ?`).run(r.id);
       await db.prepare(`UPDATE listings SET quantity = quantity + 1, status = 'available', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(r.listing_id);
+      // Track reliability — flag buyer if they've crossed the no-show threshold
+      try {
+        const reliabilityService = require("./reliabilityService");
+        await reliabilityService.recordNoShow(r.buyer_id);
+      } catch (e) {
+        console.error("[reliability] recordNoShow failed:", e.message);
+      }
     }
   }
 
@@ -349,6 +360,46 @@ async function sweepExpiredRequests() {
         message: `Your listing "${list.item_name}" has expired after 60 days. You can renew it from your profile if it's still available.`,
         data: { listingId: list.id },
       });
+    }
+  }
+}
+
+// =============================================
+// INLINE EXPIRY SAFETY (Task 6)
+// =============================================
+
+/**
+ * Runs the same expiry logic as the cron sweep, but scoped to one request.
+ * Called inline before any code path that depends on a request's current status,
+ * so correctness never depends solely on the background job being running.
+ */
+async function expireStaleRequestsForListing(requestId) {
+  const now = Date.now();
+  const request = await db.prepare("SELECT * FROM requests WHERE id = ?").get(requestId);
+  if (!request) return;
+
+  // If the seller has not responded within the response window, expire it
+  if (request.status === "notified") {
+    const age = now - new Date(request.created_at + "Z").getTime();
+    if (age > RESPONSE_WINDOW_MS) {
+      await db.prepare(`UPDATE requests SET status = 'expired', responded_at = CURRENT_TIMESTAMP WHERE id = ?`).run(requestId);
+      await db.prepare(`UPDATE listings SET quantity = quantity + 1, status = 'available', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(request.listing_id);
+    }
+  }
+
+  // If delivery was never confirmed within the no-show window, mark as no_show
+  if (request.status === "accepted" && request.accepted_at) {
+    const age = now - new Date(request.accepted_at + "Z").getTime();
+    if (age > NO_SHOW_WINDOW_MS) {
+      await db.prepare(`UPDATE requests SET status = 'no_show' WHERE id = ?`).run(requestId);
+      await db.prepare(`UPDATE listings SET quantity = quantity + 1, status = 'available', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(request.listing_id);
+      // Track reliability inline — same as sweep job
+      try {
+        const reliabilityService = require("./reliabilityService");
+        await reliabilityService.recordNoShow(request.buyer_id);
+      } catch (e) {
+        console.error("[reliability] inline recordNoShow failed:", e.message);
+      }
     }
   }
 }

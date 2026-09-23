@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { ShieldCheck, ShieldAlert, AlertTriangle, Trash2, CheckCircle, XCircle, UserCheck } from "lucide-react";
+import { ShieldCheck, ShieldAlert, AlertTriangle, Trash2, CheckCircle, XCircle, UserCheck, UserX } from "lucide-react";
 import { api } from "../api";
 import { Badge } from "../components/common/Badge";
 import { EmptyState } from "../components/common/EmptyState";
@@ -9,7 +9,8 @@ export function AdminPanel() {
   const [stats, setStats] = useState({});
   const [flags, setFlags] = useState([]);
   const [pendingVerifications, setPendingVerifications] = useState([]);
-  const [activeTab, setActiveTab] = useState("verifications"); // 'verifications' | 'flags'
+  const [flaggedUsers, setFlaggedUsers] = useState([]);
+  const [activeTab, setActiveTab] = useState("verifications"); // 'verifications' | 'flags' | 'reliability'
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -22,6 +23,13 @@ export function AdminPanel() {
       setStats(s);
       setFlags(f);
       setPendingVerifications(p);
+      // Load flagged users separately — ignore errors (column may not exist on old DB)
+      try {
+        const fu = await api.getFlaggedUsers();
+        setFlaggedUsers(Array.isArray(fu) ? fu : []);
+      } catch (_) {
+        setFlaggedUsers([]);
+      }
     } catch (e) {}
     setLoading(false);
   }, []);
@@ -90,6 +98,13 @@ export function AdminPanel() {
         >
           <ShieldAlert size={14} /> Flagged Content ({flags.length})
         </button>
+        <button
+          className={`btn ${activeTab === "reliability" ? "btn-primary" : "btn-secondary"}`}
+          onClick={() => setActiveTab("reliability")}
+          style={{ borderRadius: "var(--radius-md) var(--radius-md) 0 0" }}
+        >
+          <UserX size={14} /> Reliability Flags ({flaggedUsers.length})
+        </button>
       </div>
 
       {activeTab === "verifications" ? (
@@ -136,7 +151,7 @@ export function AdminPanel() {
             </div>
           )}
         </div>
-      ) : (
+      ) : activeTab === "flags" ? (
         <div>
           {flags.length === 0 ? (
             <div className="card">
@@ -154,6 +169,40 @@ export function AdminPanel() {
                   <div style={{ display: "flex", gap: 8 }}>
                     <button onClick={() => resolve(f.id, "remove")} className="btn btn-danger" style={{ padding: "8px 14px", fontSize: 12 }}><Trash2 size={13} /> Remove</button>
                     <button onClick={() => resolve(f.id, "clear")} className="btn btn-ghost" style={{ padding: "8px 14px", fontSize: 12 }}>Clear</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* ── Reliability Flags tab — read-only, no actions ── */
+        <div>
+          <div className="alert alert--warn" style={{ marginBottom: 16 }}>
+            <AlertTriangle size={15} className="alert__icon" />
+            <div>
+              These buyers have reached {3}+ no-shows. This is a review flag only — no automated action has been taken.
+              Contact the student directly or escalate through your institution's process.
+            </div>
+          </div>
+          {flaggedUsers.length === 0 ? (
+            <div className="card">
+              <EmptyState icon="✅" title="No reliability flags" sub="No buyers have exceeded the no-show threshold." />
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {flaggedUsers.map((u) => (
+                <div key={u.id} className="card" style={{ padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 500 }}>{u.name}</div>
+                    <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+                      {u.department} · {u.year} · USN: {u.usn}
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--muted-dim)", marginTop: 1 }}>{u.email}</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <Badge tone="red">{u.no_show_count} no-show{u.no_show_count !== 1 ? "s" : ""}</Badge>
+                    <span style={{ fontSize: 11, color: "var(--muted)" }}>⭐ {Number(u.rating_avg || 0).toFixed(1)} ({u.rating_count})</span>
                   </div>
                 </div>
               ))}

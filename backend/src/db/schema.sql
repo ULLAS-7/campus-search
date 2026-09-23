@@ -235,3 +235,20 @@ CREATE INDEX IF NOT EXISTS idx_users_verified ON users(admin_verified);
 CREATE INDEX IF NOT EXISTS idx_component_relations_source ON component_relations(source_component);
 CREATE INDEX IF NOT EXISTS idx_component_relations_bus ON component_relations(interface_bus);
 CREATE INDEX IF NOT EXISTS idx_component_relations_status ON component_relations(status);
+
+-- ============================
+-- PRICE REFERENCE (Task 12)
+-- Seed table of base prices for common items, used when there is no
+-- recent sale history to derive a median from.
+-- ============================
+CREATE TABLE IF NOT EXISTS price_reference (
+  id         TEXT PRIMARY KEY,
+  category   TEXT NOT NULL,
+  item_key   TEXT NOT NULL,            -- normalised keyword key, e.g. "arduino uno"
+  base_price INTEGER NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(category, item_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_price_reference_category ON price_reference(category);
+CREATE INDEX IF NOT EXISTS idx_price_reference_item_key ON price_reference(item_key);

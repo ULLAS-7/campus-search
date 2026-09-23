@@ -2,14 +2,22 @@ const express = require("express");
 const { v4: uuid } = require("uuid");
 const { db } = require("../db");
 const { requireAuth } = require("../middleware/auth");
+const { validate, validateQuery, schemas } = require("../middleware/validate");
 const moderationService = require("../services/moderationService");
 const notificationService = require("../services/notificationService");
+const { suggestPrice } = require("../services/pricingService");
 
 const router = express.Router();
 const LISTING_LIFETIME_DAYS = 60; // stale-listing sweep, see roadmap "listing decay" edge case
 
-// GET /api/listings?search=&category=&status=available&sort=newest&min_price=&max_price=&condition=
-router.get("/", async (req, res) => {
+// Max decoded image size: 1.5 MB.  Base64 encodes 3 bytes as 4 chars, so the
+// encoded string is ~4/3× the binary size.  We check string length to avoid
+// decoding the full buffer just for a size check.
+const MAX_IMAGE_BYTES        = 1.5 * 1024 * 1024;          // 1,572,864 bytes
+const MAX_IMAGE_B64_LENGTH   = Math.ceil(MAX_IMAGE_BYTES * 4 / 3); // ~2,097,152 chars
+
+// GET /api/listings?search=&category=&status=available&sort=newest&min_price=&max_price=&condition=&limit=&offset=
+router.get("/", validateQuery(schemas.browseListings), async (req, res) => {
   const {
     search = "",
     category = "All",
@@ -18,9 +26,11 @@ router.get("/", async (req, res) => {
     min_price,
     max_price,
     condition,
+    limit  = 20,
+    offset = 0,
   } = req.query;
 
-  let query = `
+  let baseQuery = `
     SELECT l.*, u.name as seller_name, u.department as seller_department, u.year as seller_year,
            u.verified as seller_verified, u.rating_avg as seller_rating, u.rating_count as seller_rating_count
     FROM listings l JOIN users u ON u.id = l.seller_id
@@ -29,68 +39,126 @@ router.get("/", async (req, res) => {
   const params = [];
 
   if (status !== "all") {
-    query += " AND l.status = ?";
+    baseQuery += " AND l.status = ?";
     params.push(status);
   }
   if (category !== "All") {
-    query += " AND l.category = ?";
+    baseQuery += " AND l.category = ?";
     params.push(category);
   }
   if (search) {
-    query += " AND (l.item_name LIKE ? OR l.description LIKE ?)";
+    baseQuery += " AND (l.item_name LIKE ? OR l.description LIKE ?)";
     params.push(`%${search}%`, `%${search}%`);
   }
   if (min_price !== undefined && min_price !== "") {
-    query += " AND l.price >= ?";
+    baseQuery += " AND l.price >= ?";
     params.push(Number(min_price));
   }
   if (max_price !== undefined && max_price !== "") {
-    query += " AND l.price <= ?";
+    baseQuery += " AND l.price <= ?";
     params.push(Number(max_price));
   }
   if (condition) {
-    query += " AND l.condition_notes LIKE ?";
+    baseQuery += " AND l.condition_notes LIKE ?";
     params.push(`%${condition}%`);
   }
+
+  // Count total matching rows for pagination metadata
+  const countQuery = `SELECT COUNT(*) as total FROM (${baseQuery}) as sub`;
+  const countRow = await db.prepare(countQuery).get(...params);
+  const total = parseInt(countRow?.total || "0", 10);
 
   // Sorting
   switch (sort) {
     case "price_low":
-      query += " ORDER BY l.price ASC";
+      baseQuery += " ORDER BY l.price ASC";
       break;
     case "price_high":
-      query += " ORDER BY l.price DESC";
+      baseQuery += " ORDER BY l.price DESC";
       break;
     case "rating":
-      query += " ORDER BY u.rating_avg DESC, l.created_at DESC";
+      baseQuery += " ORDER BY u.rating_avg DESC, l.created_at DESC";
       break;
     case "popular":
-      query += " ORDER BY l.view_count DESC, l.created_at DESC";
+      baseQuery += " ORDER BY l.view_count DESC, l.created_at DESC";
       break;
     default:
-      query += " ORDER BY l.created_at DESC";
+      baseQuery += " ORDER BY l.created_at DESC";
   }
 
-  const listings = await db.prepare(query).all(...params);
-  res.json(listings);
+  const cap    = Math.min(Number(limit), 60);
+  const off    = Math.max(Number(offset), 0);
+  const pageQuery = `${baseQuery} LIMIT ? OFFSET ?`;
+
+  const items = await db.prepare(pageQuery).all(...params, cap, off);
+  res.json({ items, total, limit: cap, offset: off });
 });
 
-router.post("/", requireAuth, async (req, res) => {
-  const { item_name, category, condition_notes, description, price, quantity, listing_type, return_by, parent_kit_id, image_data } = req.body;
-  if (!item_name || !category) return res.status(400).json({ error: "item_name and category are required." });
+// GET /api/listings/suggest-price — fair-price suggestion formula (Task 12)
+// Registered BEFORE /:id so it is not shadowed by the wildcard param route.
+router.get("/suggest-price", async (req, res) => {
+  try {
+    const { category, item_name, condition = "used_working", age_months } = req.query;
+    if (!category || !item_name) {
+      return res.status(400).json({ error: "category and item_name are required." });
+    }
+    const suggested = await suggestPrice({
+      category,
+      item_name,
+      condition,
+      age_months: age_months ? Number(age_months) : 0,
+    });
+    res.json({ suggested_price: suggested }); // null means no reference data available
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+router.post("/", requireAuth, validate(schemas.createListing), async (req, res) => {
+  const { item_name, category, condition_notes, condition, description, price, quantity,
+          listing_type, return_by, parent_kit_id, image_data, age_months } = req.body;
+
+  // Task 5: cap image upload size — estimate decoded bytes from base64 string length
+  // (avoids decoding the full buffer just to check size)
+  if (image_data && image_data.length > MAX_IMAGE_B64_LENGTH) {
+    return res.status(413).json({
+      error: `Image exceeds the maximum allowed size of 1.5 MB. Please compress or resize the image before uploading.`,
+    });
+  }
 
   const id = uuid();
   const expiresAt = new Date(Date.now() + LISTING_LIFETIME_DAYS * 86400000).toISOString();
   const qty = parseInt(quantity, 10) > 0 ? parseInt(quantity, 10) : 1;
 
   await db.prepare(
-    `INSERT INTO listings (id, seller_id, item_name, category, condition_notes, description, price, quantity, listing_type, return_by, parent_kit_id, image_data, expires_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(id, req.user.id, item_name, category, condition_notes || "", description || "", price || 0, qty, listing_type || "sale", return_by || null, parent_kit_id || null, image_data || null, expiresAt);
+    `INSERT INTO listings (id, seller_id, item_name, category, condition_notes, condition, description,
+       price, quantity, listing_type, return_by, parent_kit_id, image_data, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id, req.user.id, item_name, category,
+    condition_notes || "", condition || null, description || "",
+    price || 0, qty, listing_type || "sale", return_by || null,
+    parent_kit_id || null, image_data || null, expiresAt
+  );
 
+  // Compute and persist the suggested price at creation time (Task 12)
+  let suggestedPrice = null;
+  try {
+    suggestedPrice = await suggestPrice({
+      category,
+      item_name,
+      condition: condition || "used_working",
+      age_months: age_months || 0,
+    });
+    if (suggestedPrice !== null) {
+      await db.prepare(
+        `UPDATE listings SET suggested_price = ? WHERE id = ?`
+      ).run(suggestedPrice, id);
+    }
+  } catch (_) {}
 
   const listing = await db.prepare("SELECT * FROM listings WHERE id = ?").get(id);
-  const flags = moderationService.screenListing(listing, req.user);
+  const flags = await moderationService.screenListing(listing, req.user, suggestedPrice);
 
   // Auto-match wishlists: notify buyers looking for this type of item
   try {
@@ -104,12 +172,15 @@ router.post("/", requireAuth, async (req, res) => {
     ).all(category, price || 0, req.user.id);
 
     for (const wish of matchingWishes) {
-      // Check if the item name is somewhat relevant (simple keyword match)
-      const wishWords = wish.item_name.toLowerCase().split(/\s+/);
-      const listingWords = item_name.toLowerCase().split(/\s+/);
-      const overlap = wishWords.some((w) => listingWords.some((l) => l.includes(w) || w.includes(l)));
+      // Require same category OR a shared word that is at least 4 characters long.
+      // This prevents short generic words ("the", "kit", "one") from triggering
+      // false-positive wishlist notifications.
+      const wishWords    = wish.item_name.toLowerCase().split(/\s+/).filter((w) => w.length >= 4);
+      const listingWords = item_name.toLowerCase().split(/\s+/).filter((w) => w.length >= 4);
+      const sameCategory = wish.category !== "Any" && wish.category === category;
+      const sharedWord   = wishWords.some((w) => listingWords.some((l) => l === w || l.includes(w) || w.includes(l)));
 
-      if (overlap || wish.category === category) {
+      if (sameCategory || sharedWord) {
         const wisher = await db.prepare("SELECT * FROM users WHERE id = ?").get(wish.user_id);
         notificationService.notify(wisher, {
           type: "wishlist_match",

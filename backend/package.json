@@ -7,7 +7,7 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "seed": "node src/db/seed.js",
-    "test": "node --test tests/api.test.js tests/circuitTopology.test.js tests/universalFleetMesh.test.js"
+    "test": "node --test tests/raceCondition.test.js tests/pricing.test.js tests/reliability.test.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -21,7 +21,8 @@
     "pg": "^8.23.0",
     "sql.js": "^1.10.3",
     "sqlite3": "^6.0.1",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "zod": "3.23.8"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"

@@ -6,9 +6,10 @@
 const express = require("express");
 const authService = require("../services/authService");
 const { requireAuth } = require("../middleware/auth");
+const { validate, schemas } = require("../middleware/validate");
 const router = express.Router();
 
-router.post("/register", async (req, res) => {
+router.post("/register", validate(schemas.register), async (req, res) => {
   try {
     const result = await authService.register(req.body);
     res.status(201).json(result);
@@ -17,7 +18,7 @@ router.post("/register", async (req, res) => {
   }
 });
 
-router.post("/login", async (req, res) => {
+router.post("/login", validate(schemas.login), async (req, res) => {
   try {
     const { email, password } = req.body;
     const result = await authService.login(email, password);
@@ -27,7 +28,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
-router.post("/change-password", requireAuth, async (req, res) => {
+router.post("/change-password", requireAuth, validate(schemas.changePassword), async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
     const result = await authService.changePassword(req.user.id, currentPassword, newPassword);
@@ -37,7 +38,7 @@ router.post("/change-password", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/reset-password", async (req, res) => {
+router.post("/reset-password", validate(schemas.resetPassword), async (req, res) => {
   try {
     const { email, phone, newPassword } = req.body;
     const result = await authService.resetPassword(email, phone, newPassword);

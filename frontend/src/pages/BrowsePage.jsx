@@ -29,6 +29,10 @@ export function BrowsePage({ onRequestListing }) {
   const [viewMode, setViewMode] = useState("grid");
   const [inquiryModalQuery, setInquiryModalQuery] = useState(null);
   const [freeOnly, setFreeOnly] = useState(false);
+  // Pagination state
+  const [offset, setOffset] = useState(0);
+  const [total, setTotal] = useState(0);
+  const PAGE_SIZE = 20;
   const [favorites, setFavorites] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("campus_favorites") || "[]");
@@ -50,12 +54,26 @@ export function BrowsePage({ onRequestListing }) {
   const loadListings = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.getListings({ search, category, sort });
-      setListings(data);
+      const data = await api.getListings({ search, category, sort, limit: PAGE_SIZE, offset });
+      // Handle paginated shape { items, total, limit, offset }
+      if (data && Array.isArray(data.items)) {
+        setListings(data.items);
+        setTotal(data.total || 0);
+      } else if (Array.isArray(data)) {
+        // Fallback: server returned plain array (shouldn't happen after Task 8)
+        setListings(data);
+        setTotal(data.length);
+      }
     } catch (e) {}
     setLoading(false);
-  }, [search, category, sort]);
+  }, [search, category, sort, offset]);
 
+  // Reset to page 0 when filters/search/sort change
+  const resetAndLoad = useCallback(() => {
+    setOffset(0);
+  }, []);
+
+  useEffect(() => { resetAndLoad(); }, [search, category, sort]);
   useEffect(() => { loadListings(); }, [loadListings]);
 
   return (
@@ -300,6 +318,29 @@ export function BrowsePage({ onRequestListing }) {
           initialQuery={inquiryModalQuery.query}
           onClose={() => setInquiryModalQuery(null)}
         />
+      )}
+
+      {/* Pagination controls — only shown when there's more than one page */}
+      {!loading && total > PAGE_SIZE && (
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, marginTop: 24 }}>
+          <button
+            className="btn btn-ghost btn-sm"
+            disabled={offset === 0}
+            onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
+          >
+            ← Prev
+          </button>
+          <span style={{ fontSize: 13, color: "var(--muted)" }}>
+            {offset + 1}–{Math.min(offset + PAGE_SIZE, total)} of {total}
+          </span>
+          <button
+            className="btn btn-ghost btn-sm"
+            disabled={offset + PAGE_SIZE >= total}
+            onClick={() => setOffset((o) => o + PAGE_SIZE)}
+          >
+            Next →
+          </button>
+        </div>
       )}
     </div>
   );

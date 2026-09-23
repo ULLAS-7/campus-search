@@ -10,7 +10,18 @@ const jwt = require("jsonwebtoken");
 const { v4: uuid } = require("uuid");
 const { db } = require("../db");
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-in-production-64chars";
+// JWT_SECRET is loaded by scripts/setup-env.js before the server starts.
+// We resolve it lazily inside issueToken/verifyToken so tests that set
+// process.env.JWT_SECRET after require() still work correctly.
+function getJwtSecret() {
+  const s = process.env.JWT_SECRET;
+  if (!s || s.trim().length < 16) {
+    throw new Error(
+      "JWT_SECRET is not set. Run the server via `npm run dev` so setup-env.js initialises it."
+    );
+  }
+  return s;
+}
 
 async function register({ name, email, phone, department, year, usn, id_photo_data, password }) {
   if (!email || !email.includes("@")) {
@@ -109,11 +120,11 @@ async function resetPassword(email, phone, newPassword) {
 }
 
 function issueToken(userId) {
-  return jwt.sign({ sub: userId }, JWT_SECRET, { expiresIn: "30d" });
+  return jwt.sign({ sub: userId }, getJwtSecret(), { expiresIn: "30d" });
 }
 
 function verifyToken(token) {
-  return jwt.verify(token, JWT_SECRET);
+  return jwt.verify(token, getJwtSecret());
 }
 
 function httpError(status, message) {
@@ -122,4 +133,4 @@ function httpError(status, message) {
   return e;
 }
 
-module.exports = { register, login, changePassword, resetPassword, verifyToken, JWT_SECRET };
+module.exports = { register, login, changePassword, resetPassword, verifyToken, getJwtSecret };

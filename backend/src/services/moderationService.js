@@ -22,10 +22,18 @@ const SCAM_PATTERNS = [
   /advance payment/i,
 ];
 
-async function screenListing(listing, seller) {
+/**
+ * Screen a newly created listing for moderation flags.
+ *
+ * @param {object} listing        The full listing row just inserted.
+ * @param {object} seller         The seller user row.
+ * @param {number|null} suggestedPrice  Fair-price suggestion (Task 12). May be null.
+ */
+async function screenListing(listing, seller, suggestedPrice = null) {
   const flags = [];
   const text = `${listing.item_name} ${listing.description || ""}`;
 
+  // ── Existing: scam keyword detection ─────────────────────────────────────
   for (const pattern of SCAM_PATTERNS) {
     if (pattern.test(text)) {
       flags.push({ reason: "Payment-for-opportunity language detected — classic scam pattern", severity: "high" });
@@ -33,10 +41,23 @@ async function screenListing(listing, seller) {
     }
   }
 
+  // ── Existing: unverified account + large quantity/value ───────────────────
   if (!seller.verified) {
-    // unverified account + high quantity/price is a secondary risk signal
     if (/\bx\s?\d{2,}\b/i.test(listing.item_name) || listing.price > 5000) {
       flags.push({ reason: "Unverified account posting unusually large quantity/value", severity: "medium" });
+    }
+  }
+
+  // ── Task 12: suspiciously low price vs. fair-price suggestion ─────────────
+  // Wired in as an additional medium-severity flag reason.
+  // Does NOT touch or replace any of the scam-keyword logic above.
+  if (suggestedPrice !== null) {
+    const { isSuspiciouslyLowPrice } = require("./pricingService");
+    if (isSuspiciouslyLowPrice(listing.price, suggestedPrice)) {
+      flags.push({
+        reason: `Price ₹${listing.price} is under 30% of the suggested fair price ₹${suggestedPrice} — possible scam bait or pricing error`,
+        severity: "medium",
+      });
     }
   }
 

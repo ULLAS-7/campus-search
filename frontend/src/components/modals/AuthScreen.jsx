@@ -83,8 +83,12 @@ export function AuthScreen({ onAuthed }) {
               id="demo-student-btn"
               className="btn btn-secondary"
               style={{ flex: 1, fontSize: "11.5px", padding: "7px 10px", borderColor: "var(--signal)", color: "var(--signal)" }}
-              onClick={() => {
-                setForm((f) => ({ ...f, email: "aravind.k@college.edu", password: "demo1234" }));
+              onClick={async () => {
+                setError(""); setLoading(true);
+                try {
+                  const res = await api.login({ email: "aravind.k@college.edu", password: "demo1234" });
+                  setToken(res.token); onAuthed();
+                } catch (e) { setError(e.message); } finally { setLoading(false); }
               }}
             >
               ⚡ Demo Student
@@ -94,8 +98,12 @@ export function AuthScreen({ onAuthed }) {
               id="demo-admin-btn"
               className="btn btn-secondary"
               style={{ flex: 1, fontSize: "11.5px", padding: "7px 10px", borderColor: "var(--signal)", color: "var(--signal)" }}
-              onClick={() => {
-                setForm((f) => ({ ...f, email: "admin@college.edu", password: "demo1234" }));
+              onClick={async () => {
+                setError(""); setLoading(true);
+                try {
+                  const res = await api.login({ email: "admin@college.edu", password: "demo1234" });
+                  setToken(res.token); onAuthed();
+                } catch (e) { setError(e.message); } finally { setLoading(false); }
               }}
             >
               🛡️ Demo Admin

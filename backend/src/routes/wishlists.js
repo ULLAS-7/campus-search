@@ -8,6 +8,7 @@ const express = require("express");
 const { v4: uuid } = require("uuid");
 const { db } = require("../db");
 const { requireAuth } = require("../middleware/auth");
+const { validate, schemas } = require("../middleware/validate");
 
 const router = express.Router();
 
@@ -29,9 +30,8 @@ router.get("/", async (req, res) => {
 });
 
 // POST /api/wishlists — post a want
-router.post("/", requireAuth, async (req, res) => {
+router.post("/", requireAuth, validate(schemas.createWishlist), async (req, res) => {
   const { item_name, category, max_budget, notes } = req.body;
-  if (!item_name) return res.status(400).json({ error: "item_name is required." });
 
   const id = uuid();
   await db.prepare(

@@ -2,14 +2,12 @@ const express = require("express");
 const { v4: uuid } = require("uuid");
 const { db } = require("../db");
 const { requireAuth } = require("../middleware/auth");
+const { validate, schemas } = require("../middleware/validate");
 
 const router = express.Router();
 
-router.post("/", requireAuth, async (req, res) => {
+router.post("/", requireAuth, validate(schemas.createRating), async (req, res) => {
   const { request_id, ratee_id, score, comment } = req.body;
-  if (![1, 5].includes(Number(score))) {
-    return res.status(400).json({ error: "Score must be 1 (thumbs down) or 5 (thumbs up) — kept simple by design." });
-  }
 
   const request = await db.prepare("SELECT * FROM requests WHERE id = ?").get(request_id);
   if (!request || request.status !== "delivered") {

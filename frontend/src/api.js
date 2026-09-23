@@ -4,7 +4,7 @@
  *          Notifications (+ SSE), Notion, Wishlists, Profiles, Messages,
  *          Inquiries (Broadcast availability flow), Payments (UPI QR).
  */
-const BASE = "/api";
+const BASE = import.meta.env.VITE_API_URL || "/api";
 
 
 function authHeaders() {
@@ -65,6 +65,7 @@ export const api = {
   createListing: (body) => request("/listings", { method: "POST", body: JSON.stringify(body) }),
   updateListing: (id, body) => request(`/listings/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteListing: (id) => request(`/listings/${id}`, { method: "DELETE" }),
+  suggestPrice: (params) => request(`/listings/suggest-price?${new URLSearchParams(params).toString()}`),
 
   // ---- Requests (direct matching flow) ----
   createRequest: (listing_id, quantity = 1) => request("/requests", { method: "POST", body: JSON.stringify({ listing_id, quantity }) }),
@@ -97,6 +98,7 @@ export const api = {
   verifyUser: (id) => request(`/admin/verify-user/${id}`, { method: "POST" }),
   rejectUser: (id, reason) => request(`/admin/reject-user/${id}`, { method: "POST", body: JSON.stringify({ reason }) }),
   suspendUser: (id, reason) => request(`/admin/users/${id}/suspend`, { method: "PATCH", body: JSON.stringify({ reason }) }),
+  getFlaggedUsers: () => request("/admin/flagged-users"),
 
   // ---- Notifications ----
   getNotifications: (unreadOnly = false) =>
@@ -224,30 +226,103 @@ export const api = {
   rejectUser: (id, reason) => request(`/admin/reject-user/${id}`, { method: "POST", body: JSON.stringify({ reason }) }),
 };
 
-// Polling fallback for notifications
+// Real Server-Sent Events connection with automatic polling fallback.
+//
+// Opens an EventSource to /api/notifications/stream?token=<jwt>.
+// Browser EventSource cannot send custom headers, so the token is passed
+// as a query param — the backend uses requireAuthViaQuery on that one route only.
+//
+// If EventSource fails (network error, restrictive proxy, unsupported browser)
+// it automatically falls back to the original 4-second polling so nothing breaks.
 export function connectSSE(onEvent) {
   const token = localStorage.getItem("cs_token");
   if (!token) return null;
 
-  let interval = null;
+  let eventSource = null;
+  let pollInterval = null;
   let lastCount = -1;
+  let usingFallback = false;
 
-  const poll = async () => {
-    try {
-      const { count } = await api.getUnreadCount();
-      if (count !== lastCount) {
-        lastCount = count;
-        onEvent({ type: "notification_count", count });
-      }
-    } catch (e) {}
+  // ── Polling fallback (used when SSE is unavailable) ────────────────────
+  const startPolling = () => {
+    if (pollInterval) return; // already polling
+    usingFallback = true;
+    const poll = async () => {
+      try {
+        const { count } = await api.getUnreadCount();
+        if (count !== lastCount) {
+          lastCount = count;
+          onEvent({ type: "notification_count", count });
+        }
+      } catch (e) {}
+    };
+    poll();
+    pollInterval = setInterval(poll, 4000);
   };
 
-  poll();
-  interval = setInterval(poll, 4000);
+  const stopPolling = () => {
+    if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+  };
+
+  // ── Real SSE connection ────────────────────────────────────────────────
+  const openSSE = () => {
+    if (typeof EventSource === "undefined") {
+      // Browser doesn't support SSE — fall back immediately
+      startPolling();
+      return;
+    }
+
+    try {
+      const url = `${BASE}/notifications/stream?token=${encodeURIComponent(token)}`;
+      eventSource = new EventSource(url);
+
+      eventSource.onopen = () => {
+        usingFallback = false;
+        stopPolling(); // SSE working — stop polling if it was running
+      };
+
+      // Handle typed events pushed by notificationService
+      eventSource.addEventListener("notification", (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          onEvent(data);
+        } catch (_) {}
+      });
+
+      eventSource.addEventListener("notification_count", (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.count !== lastCount) {
+            lastCount = data.count;
+            onEvent({ type: "notification_count", count: data.count });
+          }
+        } catch (_) {}
+      });
+
+      eventSource.addEventListener("message", (e) => {
+        try { onEvent(JSON.parse(e.data)); } catch (_) {}
+      });
+
+      eventSource.onerror = () => {
+        // Connection dropped or blocked — fall back to polling
+        if (!usingFallback) {
+          startPolling();
+        }
+        // Don't close: browser will auto-reconnect EventSource; if it keeps
+        // failing, polling already covers the user.
+      };
+    } catch (e) {
+      // EventSource constructor threw (e.g. in a test environment) — fall back
+      startPolling();
+    }
+  };
+
+  openSSE();
 
   return {
     close: () => {
-      if (interval) clearInterval(interval);
+      stopPolling();
+      if (eventSource) { eventSource.close(); eventSource = null; }
     },
   };
 }

@@ -8,6 +8,7 @@ const express = require("express");
 const { v4: uuid } = require("uuid");
 const { db } = require("../db");
 const { requireAuth } = require("../middleware/auth");
+const { validate, schemas } = require("../middleware/validate");
 const sseService = require("../services/sseService");
 
 const router = express.Router();
@@ -27,12 +28,11 @@ router.get("/:requestId", requireAuth, async (req, res) => {
 });
 
 // POST /api/messages/:requestId — send a message
-router.post("/:requestId", requireAuth, async (req, res) => {
+router.post("/:requestId", requireAuth, validate(schemas.sendMessage), async (req, res) => {
   const access = await checkAccess(req.params.requestId, req.user.id);
   if (!access.ok) return res.status(access.status).json({ error: access.error });
 
   const { body } = req.body;
-  if (!body || !body.trim()) return res.status(400).json({ error: "Message body is required." });
 
   const id = uuid();
   await db.prepare(

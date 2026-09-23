@@ -34,7 +34,8 @@ if (usePg) {
 let sqliteDb = null;
 function getSqliteDb() {
   if (!sqliteDb) {
-    const dbPath = path.join(__dirname, 'campussearch.sqlite');
+    // Respect DB_PATH env var so tests can point at a temp file
+    const dbPath = process.env.DB_PATH || path.join(__dirname, 'campussearch.sqlite');
     sqliteDb = new sqlite3.Database(dbPath);
     sqliteDb.run("PRAGMA foreign_keys = ON");
   }
@@ -295,6 +296,16 @@ async function initSchema() {
       }
 
       await seedDefaultDataIfEmpty();
+
+      // Run safe column migrations — adds new columns to existing tables without
+      // losing data. Must run after schema.sql so base tables exist first.
+      const { runMigrations } = require('./migrations');
+      await runMigrations();
+
+      // Seed price_reference table with known campus component prices (idempotent)
+      const { seedPriceReferencesIfEmpty } = require('../services/pricingService');
+      await seedPriceReferencesIfEmpty();
+
       return database;
     } catch (e) {
       initPromise = null;

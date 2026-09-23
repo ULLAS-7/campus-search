@@ -9,6 +9,8 @@ const { db } = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const moderationService = require("../services/moderationService");
 const notificationService = require("../services/notificationService");
+const { getFlaggedUsers } = require("../services/reliabilityService");
+const { runDailyPricingSweep } = require("../services/pricingService");
 
 const router = express.Router();
 router.use(requireAuth, requireRole("admin", "moderator"));
@@ -286,6 +288,28 @@ router.patch("/users/:id/suspend", async (req, res) => {
   const { reason } = req.body;
   await db.prepare("UPDATE users SET suspended = 1, suspension_reason = ? WHERE id = ?").run(reason || "Policy violation", req.params.id);
   res.json({ ok: true });
+});
+
+// GET /api/admin/flagged-users — Users with reliability_flag = 1 (repeated no-shows)
+// Read-only list for human admin review. Does NOT auto-suspend anyone.
+router.get("/flagged-users", async (req, res) => {
+  try {
+    const users = await getFlaggedUsers();
+    res.json(users || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/pricing/run-sweep — Manually trigger the daily pricing sweep.
+// Returns a summary JSON for testing and verification.
+router.post("/pricing/run-sweep", async (req, res) => {
+  try {
+    const summary = await runDailyPricingSweep();
+    res.json({ ok: true, summary });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
 });
 
 module.exports = router;

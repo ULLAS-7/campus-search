@@ -35,11 +35,19 @@ app.use(morgan("dev"));
 // Rate limiting — 2000 requests per 15 min window, ignore notification polling
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 2000,
+  max: 300,
   skip: (req) => req.path.includes("/notifications/unread-count") || req.path.includes("/notifications/stream"),
   message: { error: "Too many requests from this IP, please try again later." },
 });
 app.use("/api/", limiter);
+
+// Strict limiter for auth routes — 10 requests per 15 min to deter brute-force
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: "Too many authentication attempts from this IP. Please try again in 15 minutes." },
+});
+app.use("/api/auth", authLimiter);
 
 
 // DB init is async with sql.js (WASM), so block requests until DB is ready

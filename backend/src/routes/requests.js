@@ -1,12 +1,13 @@
 const express = require("express");
 const { requireAuth } = require("../middleware/auth");
+const { validate, schemas } = require("../middleware/validate");
 const matchingService = require("../services/matchingService");
 const { db } = require("../db");
 
 const router = express.Router();
 
 // Buyer requests a listing
-router.post("/", requireAuth, async (req, res) => {
+router.post("/", requireAuth, validate(schemas.createRequest), async (req, res) => {
   try {
     const { listing_id, quantity = 1 } = req.body;
     const request = await matchingService.createRequest(listing_id, req.user.id, parseInt(quantity, 10));
@@ -17,7 +18,7 @@ router.post("/", requireAuth, async (req, res) => {
 });
 
 // Seller accepts or declines
-router.patch("/:id/respond", requireAuth, async (req, res) => {
+router.patch("/:id/respond", requireAuth, validate(schemas.respondToRequest), async (req, res) => {
   try {
     const { decision, delivery_day } = req.body; // decision: 'accept' | 'decline'
     const updated = await matchingService.respondToRequest(req.params.id, req.user.id, decision, delivery_day);
