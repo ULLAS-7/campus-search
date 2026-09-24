@@ -35,7 +35,9 @@ let sqliteDb = null;
 function getSqliteDb() {
   if (!sqliteDb) {
     // Respect DB_PATH env var so tests can point at a temp file
-    const dbPath = process.env.DB_PATH || path.join(__dirname, 'campussearch.sqlite');
+    // On Vercel use /tmp (the only writable directory in serverless)
+    const dbPath = process.env.DB_PATH ||
+      (process.env.VERCEL ? '/tmp/campussearch.sqlite' : path.join(__dirname, 'campussearch.sqlite'));
     sqliteDb = new sqlite3.Database(dbPath);
     sqliteDb.run("PRAGMA foreign_keys = ON");
   }

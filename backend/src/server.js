@@ -1,6 +1,14 @@
-// Must run first — creates .env if missing (with a generated JWT_SECRET) and
-// loads it into process.env. Throws a hard error if JWT_SECRET is still absent.
-require("../scripts/setup-env");
+// On Vercel (read-only filesystem) skip the file-writing setup script.
+// JWT_SECRET is set as an environment variable in the Vercel project settings.
+// Locally, setup-env.js creates .env automatically.
+if (process.env.VERCEL) {
+  require("dotenv").config();
+  if (!process.env.JWT_SECRET) {
+    process.env.JWT_SECRET = "vercel-fallback-secret-change-in-env-settings-64chars";
+  }
+} else {
+  require("../scripts/setup-env");
+}
 const { startApp } = require("./app");
 const matchingService = require("./services/matchingService");
 const { sweepExpiredListings } = require("./routes/listings");
