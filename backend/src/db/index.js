@@ -278,7 +278,9 @@ async function initSchema() {
             .replace(/INTEGER PRIMARY KEY AUTOINCREMENT/g, 'SERIAL PRIMARY KEY')
             .replace(/datetime\('now'\)/g, 'CURRENT_TIMESTAMP')
             .replace(/datetime\('now',\s*'\+2 hours'\)/g, "CURRENT_TIMESTAMP + INTERVAL '2 hours'")
-            .replace(/REAL/g, 'FLOAT');
+            .replace(/TEXT NOT NULL DEFAULT \(datetime\('now'\)\)/g, 'TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP')
+            .replace(/TEXT NOT NULL DEFAULT \(datetime\('now',\s*'[^']+'\)\)/g, 'TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP')
+            .replace(/\bREAL\b/g, 'FLOAT');
           
           await pgPool.query(pgSchema);
         } catch (err) {
