@@ -183,8 +183,9 @@ async function seedDefaultDataIfEmpty() {
         userIds[u.name] = id;
         const isVerified = u.admin_verified !== undefined ? u.admin_verified : 1;
         await database.prepare(
-          `INSERT OR IGNORE INTO users (id, name, email, phone, department, year, usn, role, password_hash, verified, admin_verified, bio)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO users (id, name, email, phone, department, year, usn, role, password_hash, verified, admin_verified, bio)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (email) DO NOTHING`
         ).run(id, u.name, u.email, u.phone, u.department, u.year, u.usn, u.role || "student", hash, isVerified, isVerified, u.bio || "");
       }
 

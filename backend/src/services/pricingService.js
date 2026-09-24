@@ -111,8 +111,9 @@ async function seedPriceReferencesIfEmpty() {
     if (parseInt(row?.c || "0", 10) > 0) return;
     for (const entry of PRICE_REFERENCE_SEED) {
       await db.prepare(
-        `INSERT OR IGNORE INTO price_reference (id, category, item_key, base_price)
-         VALUES (?, ?, ?, ?)`
+        `INSERT INTO price_reference (id, category, item_key, base_price)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT (category, item_key) DO NOTHING`
       ).run(uuid(), entry.category, entry.item_key, entry.base_price);
     }
     console.log("[pricingService] Seeded price_reference with", PRICE_REFERENCE_SEED.length, "entries.");
