@@ -4,15 +4,16 @@ const bcrypt = require('bcryptjs');
 const { v4: uuid } = require('uuid');
 require('dotenv').config();
 
-let sqlite3;
-try {
-  sqlite3 = require('sqlite3').verbose();
-} catch (e) {
-  sqlite3 = null;
+let sqlite3 = null;
+function getSqlite3() {
+  if (!sqlite3) {
+    try { sqlite3 = require('sqlite3').verbose(); } catch (e) { sqlite3 = null; }
+  }
+  return sqlite3;
 }
 
 let pgPool = null;
-let activeEngine = 'sqlite'; // Default to robust local SQLite, fallback seamlessly
+let activeEngine = 'sqlite';
 
 // Check if PostgreSQL is explicitly configured and not forced to sqlite
 const usePg = process.env.DATABASE_URL && process.env.USE_SQLITE !== 'true';
@@ -34,11 +35,11 @@ if (usePg) {
 let sqliteDb = null;
 function getSqliteDb() {
   if (!sqliteDb) {
-    // Respect DB_PATH env var so tests can point at a temp file
-    // On Vercel use /tmp (the only writable directory in serverless)
+    const s3 = getSqlite3();
+    if (!s3) throw new Error("sqlite3 native module not available in this environment. Set DATABASE_URL to use PostgreSQL.");
     const dbPath = process.env.DB_PATH ||
       (process.env.VERCEL ? '/tmp/campussearch.sqlite' : path.join(__dirname, 'campussearch.sqlite'));
-    sqliteDb = new sqlite3.Database(dbPath);
+    sqliteDb = new s3.Database(dbPath);
     sqliteDb.run("PRAGMA foreign_keys = ON");
   }
   return sqliteDb;
