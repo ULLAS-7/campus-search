@@ -114,8 +114,12 @@ export default function App() {
     { id: "admin", label: "Admin", icon: <ShieldCheck size={14} /> },
   ];
 
+  // Pages that manage their own full-width layout (Stitch redesign)
+  const FULL_WIDTH_TABS = new Set(["browse", "admin"]);
+  const isFullWidth = FULL_WIDTH_TABS.has(tab);
+
   return (
-    <div className="page-wrapper">
+    <div className="page-wrapper bg-stitch">
       <Navbar
         tabs={tabs}
         activeTab={tab}
@@ -133,18 +137,25 @@ export default function App() {
         }
       />
 
-      <div className="container page-content">
-        {tab === "browse" && <BrowsePage onRequestListing={setRequestListing} />}
-        {tab === "copilot" && <AiProjectCopilot onRequestListing={setRequestListing} />}
-        {tab === "topology" && <TopologyMeshPage />}
-        {tab === "ingestion" && <BulkIngestionStudio />}
-        {tab === "inquiries" && <InquiriesPage />}
-        {tab === "inbox" && <SellerInbox onOpenPayment={setPaymentRequestId} />}
-        {tab === "wishlist" && <WishlistBoard onRequestListing={setRequestListing} />}
-        {tab === "notion" && <NotionHub />}
-        {tab === "profile" && <ProfilePage />}
-        {tab === "admin" && <AdminPanel />}
-      </div>
+      {/* Full-width Stitch pages — no container constraint */}
+      {isFullWidth ? (
+        <div style={{ width: "100%", minHeight: "calc(100vh - 72px)" }}>
+          {tab === "browse" && <BrowsePage onRequestListing={setRequestListing} />}
+          {tab === "admin"  && <AdminPanel />}
+        </div>
+      ) : (
+        /* Legacy pages — keep original container + spacing */
+        <div className="container page-content" style={{ paddingTop: 24 }}>
+          {tab === "copilot"    && <AiProjectCopilot onRequestListing={setRequestListing} />}
+          {tab === "topology"   && <TopologyMeshPage />}
+          {tab === "ingestion"  && <BulkIngestionStudio />}
+          {tab === "inquiries"  && <InquiriesPage />}
+          {tab === "inbox"      && <SellerInbox onOpenPayment={setPaymentRequestId} />}
+          {tab === "wishlist"   && <WishlistBoard onRequestListing={setRequestListing} />}
+          {tab === "notion"     && <NotionHub />}
+          {tab === "profile"    && <ProfilePage />}
+        </div>
+      )}
 
       {requestListing && <RequestModal listing={requestListing} onClose={() => setRequestListing(null)} onRefresh={() => setTab("inbox")} />}
       {paymentRequestId && <PaymentModal requestId={paymentRequestId} onClose={() => setPaymentRequestId(null)} onPaymentConfirmed={() => setTab("inbox")} />}

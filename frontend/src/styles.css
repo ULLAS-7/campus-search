@@ -5,7 +5,10 @@
    Design tokens → Utilities → Components → Layout → Animations
    ============================================================ */
 
-/* ---- Google Fonts are loaded in index.html ---- */
+/* ---- Google Fonts (Space Grotesk + Inter) ---- */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+/* ---- Other Google Fonts are also loaded in index.html ---- */
 
 /* ========== DESIGN TOKENS ========== */
 :root {
@@ -1398,3 +1401,312 @@ select.input {
   border: 1px solid var(--glass-border);
 }
 
+
+
+/* ============================================================
+   STITCH AI HYBRID FUTURISTIC DESIGN LAYER
+   Glassmorphism light theme with neon accents
+   ============================================================ */
+
+:root {
+  --st-bg: #F8FAFF;
+  --st-surface: rgba(255,255,255,0.82);
+  --st-surface-high: rgba(255,255,255,0.92);
+  --st-border: rgba(255,255,255,0.9);
+  --st-border-irid-start: rgba(0,255,163,0.5);
+  --st-border-irid-mid: rgba(0,229,255,0.4);
+  --st-border-irid-end: rgba(99,102,241,0.35);
+  --st-mint: #00ffa3;
+  --st-mint-dim: #00e290;
+  --st-cyan: #00E5FF;
+  --st-indigo: #4b41e1;
+  --st-navy: #070C1E;
+  --st-rose: #bb0056;
+  --st-amber: #f59e0b;
+  --st-text: #161b2d;
+  --st-muted: #334155;
+  --st-muted-dim: #64748b;
+  --st-container: #EEF2FF;
+  --st-container-low: #f3f2ff;
+  --st-glow-mint: 0 0 20px rgba(0,255,163,0.35), 0 4px 16px rgba(0,229,255,0.2);
+  --st-glow-indigo: 0 0 20px rgba(99,102,241,0.3), 0 4px 16px rgba(75,65,225,0.2);
+  --st-glow-rose: 0 0 16px rgba(187,0,86,0.3);
+  --st-grad-primary: linear-gradient(135deg, #00ffa3, #00c8ff, #6366f1);
+  --st-grad-mint-cyan: linear-gradient(135deg, var(--st-mint), var(--st-cyan), var(--st-indigo));
+  --st-grad-card: linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(243,246,255,0.75) 100%);
+  --st-backdrop: blur(20px);
+  --st-radius-card: 1rem;
+  --st-radius-pill: 9999px;
+  --st-radius-lg: 1.5rem;
+}
+
+/* Futuristic background grid */
+.bg-stitch {
+  background-color: var(--st-bg);
+  background-image:
+    radial-gradient(circle at 10% 20%, rgba(0,255,163,0.08) 0%, transparent 40%),
+    radial-gradient(circle at 90% 15%, rgba(99,102,241,0.09) 0%, transparent 45%),
+    radial-gradient(rgba(99,102,241,0.08) 1.2px, transparent 1.2px),
+    radial-gradient(rgba(0,229,255,0.09) 1.2px, transparent 1.2px);
+  background-size: 100% 100%, 100% 100%, 28px 28px, 56px 56px;
+  background-position: 0 0, 0 0, 0 0, 14px 14px;
+}
+
+/* Glass card — holographic iridescent border */
+.glass-holo {
+  background: var(--st-surface);
+  backdrop-filter: var(--st-backdrop);
+  -webkit-backdrop-filter: var(--st-backdrop);
+  border: 1px solid var(--st-border);
+  border-radius: var(--st-radius-card);
+  position: relative;
+  transition: transform 0.3s cubic-bezier(0.16,1,0.3,1), box-shadow 0.3s ease;
+}
+.glass-holo::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: linear-gradient(135deg, var(--st-border-irid-start), var(--st-border-irid-mid), var(--st-border-irid-end));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.65;
+  transition: opacity 0.3s ease;
+}
+.glass-holo:hover::before { opacity: 1; }
+.glass-holo:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px -15px rgba(0,229,255,0.22), 0 0 25px -4px rgba(99,102,241,0.25);
+}
+
+/* Pill button — neon gradient */
+.btn-stitch-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 32px;
+  border-radius: var(--st-radius-pill);
+  background: var(--st-grad-primary);
+  color: var(--st-navy);
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  border: none;
+  cursor: pointer;
+  box-shadow: var(--st-glow-mint);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.btn-stitch-primary:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 8px 28px rgba(0,229,255,0.45), 0 0 16px rgba(99,102,241,0.3);
+}
+.btn-stitch-primary:active { transform: scale(0.99); }
+
+/* Secondary outline pill */
+.btn-stitch-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: var(--st-radius-pill);
+  background: rgba(255,255,255,0.85);
+  color: var(--st-navy);
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  border: 1px solid rgba(255,255,255,0.9);
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(99,102,241,0.08);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.btn-stitch-secondary:hover {
+  box-shadow: 0 8px 25px rgba(99,102,241,0.15);
+  transform: translateY(-1px);
+}
+
+/* Stitch navbar */
+.stitch-nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  height: 72px;
+  background: rgba(255,255,255,0.75);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-bottom: 1px solid rgba(195,192,255,0.4);
+  box-shadow: 0 4px 30px rgba(99,102,241,0.08), 0 1px 0 rgba(0,229,255,0.2);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.stitch-nav__tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(238,242,255,0.6);
+  padding: 6px;
+  border-radius: var(--st-radius-pill);
+  border: 1px solid rgba(255,255,255,0.6);
+}
+
+.stitch-nav__tab {
+  padding: 8px 14px;
+  border-radius: var(--st-radius-pill);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--st-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  position: relative;
+}
+.stitch-nav__tab:hover { color: var(--st-navy); background: rgba(255,255,255,0.6); }
+.stitch-nav__tab--active {
+  background: var(--st-grad-mint-cyan);
+  color: var(--st-navy) !important;
+  font-weight: 700;
+  box-shadow: 0 0 16px rgba(0,255,163,0.45);
+}
+
+/* Input stitch */
+.input-stitch {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: var(--st-radius-pill);
+  background: rgba(255,255,255,0.9);
+  border: 1px solid rgba(180,180,255,0.5);
+  color: var(--st-navy);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+.input-stitch:focus {
+  border-color: var(--st-cyan);
+  box-shadow: 0 0 0 4px rgba(0,229,255,0.2), 0 0 16px rgba(0,255,163,0.2);
+}
+.input-stitch::placeholder { color: #94a3b8; }
+
+/* Stitch category pill chip */
+.chip-stitch {
+  padding: 8px 18px;
+  border-radius: var(--st-radius-pill);
+  background: rgba(255,255,255,0.9);
+  border: 1px solid rgba(195,192,255,0.4);
+  color: var(--st-muted);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.chip-stitch:hover { border-color: var(--st-cyan); box-shadow: 0 0 12px rgba(0,229,255,0.25); color: var(--st-indigo); }
+.chip-stitch--active {
+  background: var(--st-grad-mint-cyan);
+  color: var(--st-navy);
+  border-color: transparent;
+  box-shadow: 0 0 16px rgba(0,255,163,0.45);
+  font-weight: 700;
+}
+
+/* Stat card stitch */
+.stat-stitch {
+  background: var(--st-grad-card);
+  backdrop-filter: var(--st-backdrop);
+  border: 1px solid var(--st-border);
+  border-radius: var(--st-radius-card);
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+.stat-stitch:hover { transform: translateY(-4px); }
+
+/* Pulse dot */
+.pulse-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--st-mint);
+  box-shadow: 0 0 8px var(--st-mint);
+  animation: st-pulse 2s ease-in-out infinite;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.pulse-dot--amber { background: var(--st-amber); box-shadow: 0 0 8px var(--st-amber); }
+.pulse-dot--rose { background: var(--st-rose); box-shadow: 0 0 8px var(--st-rose); }
+
+@keyframes st-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.2); }
+}
+
+/* Neon glow text */
+.text-stitch-mint { color: #00c97a; }
+.text-stitch-cyan { color: #0ea5e9; }
+.text-stitch-indigo { color: var(--st-indigo); }
+.text-stitch-rose { color: var(--st-rose); }
+.text-stitch-navy { color: var(--st-navy); }
+.text-stitch-muted { color: var(--st-muted-dim); }
+
+/* Pagination stitch */
+.pagination-stitch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  background: rgba(255,255,255,0.8);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(195,192,255,0.4);
+  border-radius: var(--st-radius-card);
+}
+
+/* Status badge stitch */
+.badge-stitch-avail {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px; border-radius: var(--st-radius-pill);
+  background: rgba(255,255,255,0.95);
+  border: 1px solid rgba(0,229,255,0.4);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--st-navy);
+}
+.badge-stitch-pending {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px; border-radius: var(--st-radius-pill);
+  background: rgba(255,255,255,0.95);
+  border: 1px solid rgba(245,158,11,0.5);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: #92400e;
+}
+
+/* ID upload box */
+.id-upload-box {
+  border: 2px dashed rgba(0,255,163,0.4);
+  border-radius: var(--st-radius-card);
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  background: rgba(0,255,163,0.03);
+  transition: all 0.2s ease;
+}
+.id-upload-box:hover { border-color: var(--st-cyan); background: rgba(0,229,255,0.04); }
+.id-preview-img { max-height: 120px; border-radius: 8px; margin: 8px auto 0; object-fit: contain; }
