@@ -206,11 +206,12 @@ async function seedDefaultDataIfEmpty() {
         { seller: "Rohit M", item_name: "Breadboard 830-point ×3", category: "Passive Components", condition_notes: "New", description: "Three full-size breadboards, unused.", price: 0 }
       ];
 
+      const expiresAt = new Date(Date.now() + 60 * 86400000).toISOString();
       for (const l of listings) {
         await database.prepare(
           `INSERT INTO listings (id, seller_id, item_name, category, condition_notes, description, price, expires_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', '+60 days'))`
-        ).run(uuid(), userIds[l.seller] || Object.values(userIds)[0], l.item_name, l.category, l.condition_notes, l.description || "", l.price);
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(uuid(), userIds[l.seller] || Object.values(userIds)[0], l.item_name, l.category, l.condition_notes, l.description || "", l.price, expiresAt);
       }
 
       const wishlists = [
@@ -225,10 +226,11 @@ async function seedDefaultDataIfEmpty() {
         ).run(uuid(), userIds[w.user] || Object.values(userIds)[0], w.item_name, w.category, w.max_budget, w.notes);
       }
 
+      const inqExpires = new Date(Date.now() + 2 * 86400000).toISOString();
       await database.prepare(
         `INSERT INTO inquiries (id, buyer_id, item_query, category, needed_by_date, max_budget, notes, status, expires_at)
-         VALUES (?, ?, 'STM32 Nucleo Board', 'Microcontrollers', 'Tomorrow 2 PM', 600, 'Urgent for Lab Exam', 'open', datetime('now', '+2 days'))`
-      ).run(uuid(), userIds["Priya M"] || Object.values(userIds)[0]);
+         VALUES (?, ?, 'STM32 Nucleo Board', 'Microcontrollers', 'Tomorrow 2 PM', 600, 'Urgent for Lab Exam', 'open', ?)`
+      ).run(uuid(), userIds["Priya M"] || Object.values(userIds)[0], inqExpires);
 
       await database.prepare(
         `INSERT INTO notifications (id, user_id, type, title, message, data_json)

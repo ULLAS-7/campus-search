@@ -331,7 +331,7 @@ async function sweepExpiredRequests() {
 
   // Auto-expire open inquiries
   const expiredInquiries = await db.prepare(
-    `SELECT * FROM inquiries WHERE status = 'open' AND expires_at::timestamp < CURRENT_TIMESTAMP`
+    `SELECT * FROM inquiries WHERE status = 'open' AND expires_at < CURRENT_TIMESTAMP`
   ).all();
   for (const inq of expiredInquiries) {
     await db.prepare(`UPDATE inquiries SET status = 'expired' WHERE id = ?`).run(inq.id);
@@ -348,7 +348,7 @@ async function sweepExpiredRequests() {
 
   // Auto-expire listings that have passed their 60-day lifetime
   const expiredListings = await db.prepare(
-    `SELECT * FROM listings WHERE status = 'available' AND expires_at::timestamp < CURRENT_TIMESTAMP`
+    `SELECT * FROM listings WHERE status = 'available' AND expires_at < CURRENT_TIMESTAMP`
   ).all();
   for (const list of expiredListings) {
     await db.prepare(`UPDATE listings SET status = 'expired', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(list.id);
